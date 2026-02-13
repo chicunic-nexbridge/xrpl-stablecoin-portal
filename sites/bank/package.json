@@ -1,0 +1,14 @@
+{
+  "name": "@xrpl-stablecoin-portal/bank",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@xrpl-stablecoin-portal/shared": "workspace:*"
+  }
+}

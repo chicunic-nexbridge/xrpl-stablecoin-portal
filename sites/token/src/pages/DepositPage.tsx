@@ -1,0 +1,236 @@
+import { Banknote, Copy, Link, QrCode, Wallet } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { TrustLineDialog } from "@/components/TrustLineDialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useI18n } from "@/i18n";
+import { getVirtualAccount, setupVirtualAccount } from "@/lib/api";
+import { getBankName, getBranchName } from "@/lib/banks";
+import { useAuthContext } from "@/lib/useAuthContext";
+
+function FiatDepositTab() {
+  const { user, refreshAll, virtualAccount, setVirtualAccount } = useAuthContext();
+  const { t } = useI18n();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (user.hasVirtualAccount && !virtualAccount) {
+      getVirtualAccount()
+        .then(setVirtualAccount)
+        .catch(() => {});
+    }
+  }, [user.hasVirtualAccount, virtualAccount, setVirtualAccount]);
+
+  async function handleSetup() {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await setupVirtualAccount();
+      setVirtualAccount(result);
+      refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("deposit.fiatSetupError"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("deposit.fiatTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!virtualAccount && (
+          <div className="mb-4 space-y-2">
+            <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-5 w-5 text-amber-600" />
+                  <p className="font-medium text-sm">{t("deposit.fiatSetupTitle")}</p>
+                </div>
+                <p className="text-muted-foreground text-sm">{t("deposit.fiatSetupDescription")}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleSetup} disabled={loading} className="shrink-0">
+                {loading ? t("deposit.fiatSetupLoading") : t("deposit.fiatSetupButton")}
+              </Button>
+            </div>
+            {error && <p className="text-destructive text-sm">{error}</p>}
+          </div>
+        )}
+        <div
+          className={`rounded-md border p-4 space-y-4${!virtualAccount ? "cursor-not-allowed opacity-50 [&_*]:pointer-events-none" : ""}`}
+        >
+          <p className="text-muted-foreground text-sm">{t("deposit.fiatDescription")}</p>
+          <div className="flex justify-center">
+            <div className="w-72 space-y-2 rounded-md border p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("deposit.bankName")}</span>
+                <span>{virtualAccount ? getBankName(virtualAccount.bankCode) : "--"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("deposit.branchName")}</span>
+                <span>{virtualAccount ? getBranchName(virtualAccount.branchCode) : "--"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("deposit.accountNumber")}</span>
+                <span className="font-mono">{virtualAccount?.accountNumber ?? "--"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("deposit.accountHolder")}</span>
+                <span>{virtualAccount?.accountHolder ?? "--"}</span>
+              </div>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-xs">{t("deposit.fiatConfirmNote")}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function XrpDepositTab() {
+  const { address, tokens, trustlines, refreshTrustlines } = useAuthContext();
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const [tokenId, setTokenId] = useState("");
+  const [trustDialogOpen, setTrustDialogOpen] = useState(false);
+  const [_copied, setCopied] = useState(false);
+
+  const selectedTrustline = trustlines.find((b) => b.tokenId === tokenId);
+  const hasTrustline = selectedTrustline?.hasTrustline ?? false;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("deposit.xrpTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {!address && (
+            <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-amber-600" />
+                  <p className="font-medium text-sm">{t("deposit.xrpNoWalletTitle")}</p>
+                </div>
+                <p className="text-muted-foreground text-sm">{t("deposit.xrpNoWallet")}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigate("/settings")} className="shrink-0">
+                {t("deposit.xrpNoWalletButton")}
+              </Button>
+            </div>
+          )}
+
+          <div
+            className={`rounded-md border p-4 space-y-4${!address ? "cursor-not-allowed opacity-50 [&_*]:pointer-events-none" : ""}`}
+          >
+            <div className="space-y-2">
+              <Label>{t("deposit.tokenLabel")}</Label>
+              <select
+                value={tokenId}
+                onChange={(e) => setTokenId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                required
+              >
+                <option value="" disabled>
+                  {t("deposit.tokenSelect")}
+                </option>
+                {tokens.map((tk) => (
+                  <option key={tk.tokenId} value={tk.tokenId}>
+                    {tk.currency} - {tk.issuerAddress}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {tokenId && !hasTrustline && (
+              <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Link className="h-5 w-5 text-amber-600" />
+                    <p className="font-medium text-sm">{t("deposit.trustLineTitle")}</p>
+                  </div>
+                  <p className="text-muted-foreground text-sm">{t("deposit.trustLineWarning")}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setTrustDialogOpen(true)} className="shrink-0">
+                  {t("deposit.trustLineSet")}
+                </Button>
+              </div>
+            )}
+
+            <TrustLineDialog
+              tokenId={tokenId}
+              open={trustDialogOpen}
+              onOpenChange={setTrustDialogOpen}
+              onSuccess={refreshTrustlines}
+            />
+
+            <p className="text-muted-foreground text-sm">{t("deposit.xrpSendDescription")}</p>
+            <div className="flex justify-center">
+              <div className="space-y-4 rounded-md border p-6 text-center">
+                <div className="flex justify-center">
+                  {address ? (
+                    <QRCodeSVG value={address} size={200} />
+                  ) : (
+                    <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-dashed">
+                      <QrCode className="h-12 w-12 text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-1 text-muted-foreground text-xs">{t("deposit.xrpAddress")}</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{address || "--"}</code>
+                    {address && (
+                      <Button variant="ghost" size="icon-xs" onClick={handleCopy}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="text-muted-foreground text-xs">{t("deposit.fiatConfirmNote")}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DepositPage() {
+  const { t } = useI18n();
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-6">
+      <Tabs defaultValue="fiat">
+        <TabsList className="w-full">
+          <TabsTrigger value="fiat" className="flex-1">
+            {t("deposit.fiatTitle")}
+          </TabsTrigger>
+          <TabsTrigger value="xrp" className="flex-1">
+            {t("deposit.xrpTitle")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="fiat">
+          <FiatDepositTab />
+        </TabsContent>
+        <TabsContent value="xrp">
+          <XrpDepositTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

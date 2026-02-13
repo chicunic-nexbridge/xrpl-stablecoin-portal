@@ -1,0 +1,11 @@
+packages:
+  - sites/*
+  - packages/*
+
+ignoredBuiltDependencies:
+  - esbuild
+
+onlyBuiltDependencies:
+  - '@firebase/util'
+  - msw
+  - protobufjs
